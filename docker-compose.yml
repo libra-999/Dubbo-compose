@@ -1,0 +1,100 @@
+services:
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27015:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=libra
+      - MONGO_INITDB_ROOT_PASSWORD=libra123
+    volumes:
+      - mon:/data/db
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "-u", "libra", "-p", "libra123", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dubbo
+  mysql:
+    image: mysql:latest
+    ports:
+      - 3306:3306
+    environment: 
+      MYSQL_DATABASE: book_db
+      MYSQL_PASSWORD: nacos123
+    networks:
+      - dubbo
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    volumes:
+      - mysql:/var/lib/mysql
+      # - ./mysql-schema.sql:/docker-entrypoint-initdb.d/mysql-schema.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-uroot", "-pnacos123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  redis:
+    image: redis:latest
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    ports: 
+      - "6379:6379"
+    command: redis-server --requirepass libra123
+    volumes:
+      - redis:/data
+    networks:
+      - dubbo
+  nacos:
+    image: nacos/nacos-server:latest
+    restart: on-failure
+    ports:
+      - "8848:8848" # Web UI
+      - "9848:9848" # gRPC Dubbo 3
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      NACOS_CONFIG_MIGRATE_ENABLE: "false"
+      NACOS_CONFIG_DUMP_ENABLE: "false" 
+      # NACOS_AUTH_ENABLE: "false" 
+      # NACOS_SERVERS: ""
+      NACOS_AUTH_TOKEN: "aCv3NDLTFToCkAvPVedCwhGK+Pez6Epy9dFid7C29A4=" # openssl rand -base64 32
+      NACOS_AUTH_IDENTITY_KEY: "bk-123"
+      NACOS_AUTH_IDENTITY_VALUE: "A12EE944-D052-41DF-99F0-F55B36863150" # uuidgen
+      # NACOS_CONFIG_DUMP_WAIT_TIME: "5000"
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: book_db
+      MYSQL_SERVICE_USER: root
+      MYSQL_SERVICE_PASSWORD: nacos123
+      MYSQL_SERVICE_DB_PARAM: "useSSL=false&allowPublicKeyRetrieval=true&autoReconnect=true&characterEncoding=utf8&useUnicode=true&serverTimezone=UTC&useLegacyDatetimeCode=false"      
+      # JVM_XMS: 512m
+      # JVM_XMX: 512m
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+    depends_on:
+      mysql:
+        condition: service_healthy
+    volumes:
+      - ./mysql-schema.sql/:/home/nacos/init.d/
+    networks:
+      - dubbo
+
+volumes:
+  mon:
+  mysql:
+  redis:
+
+networks:
+  dubbo: 
+    driver: bridge
